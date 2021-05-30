@@ -19,8 +19,7 @@ config = tf.compat.v1.ConfigProto()
 config.gpu_options.allow_growth = True
 sess = tf.compat.v1.Session(config=config)
 
-def create_model_fc(input_len):
-    # initializer = tf.keras.initializers.RandomUniform(minval=0., maxval=1.)
+def create_model_fnn(input_len):
     model = Sequential()
     model.add(Input(shape=input_len))
     model.add(Dense(1024, use_bias=True, kernel_initializer='glorot_normal', kernel_regularizer=tf.keras.regularizers.l2(l2=0.00003)))
@@ -67,18 +66,6 @@ def create_model_cnn(shape):
     model.add(Activation('relu'))
     return model
 
-
-def lineNotifyMessage(line_token, msg):
-    headers = {
-        "Authorization": "Bearer " + line_token,
-        "Content-Type": "application/x-www-form-urlencoded"
-    }
-
-    payload = {'message': msg}
-    r = requests.post("https://notify-api.line.me/api/notify", headers=headers, params=payload)
-    return r.status_code
-
-
 def data_preparation(dir):
     with open(dir + 'data_train.pkl', 'rb') as f1:
         data_train = pkl.load(f1)
@@ -88,14 +75,6 @@ def data_preparation(dir):
         data_test = pkl.load(f3)
     with open(dir + 'brix_gt_test.pkl', 'rb') as f4:
         label_test = pkl.load(f4)
-    '''
-    with open(dir + 'data_train_2.pkl', 'rb') as f5:
-        data_train_2 = pkl.load(f5)
-    with open(dir + 'data_train_3.pkl', 'rb') as f6:
-        data_train_3 = pkl.load(f6)
-    with open(dir + 'data_train_4.pkl', 'rb') as f7:
-        data_train_4 = pkl.load(f7)
-    '''
     with open(dir + 'data_val.pkl', 'rb') as f8:
         data_val = pkl.load(f8)
     with open(dir + 'label_val.pkl', 'rb') as f9:
@@ -162,42 +141,36 @@ if __name__ == "__main__":
     bands = [400, 1700]
     date_number = 218
     model_number = 5
-    model_type = 'cnn'
+    model_type = 'cnn' # cnn or fnn
     mode = 'test' #test
     # data loading
     X_train, X_val, X_test, Y_train, Y_val, Y_test, brix_gt_train, brix_gt_test, brix_gt_val = data_preparation(
-        'tai3_part4_train_test_val_v2_10/' + str(bands[0]) + '_' + str(bands[1]) + '/')
+        'location/of/the/data/for/training/' + str(bands[0]) + '_' + str(bands[1]) + '/')
     print("Mean Brix: " + str(np.mean(np.concatenate([Y_train, Y_test, Y_val]))))
     print("Std: " + str(np.std(np.concatenate([Y_train, Y_test, Y_val]))))
     pdb.set_trace()
     X_train = np.nan_to_num(X_train)
     X_val = np.nan_to_num(X_val)
     X_test = np.nan_to_num(X_test)
-    if model_type == 'mlp':
+
+    # transforming the data into 1-D array for FNN
+    if model_type == 'fnn':
         X_train = np.nan_to_num(np.mean(np.nan_to_num(np.mean(X_train, axis=1)), axis=1))
         X_test = np.nan_to_num(np.mean(np.nan_to_num(np.mean(X_test, axis=1)), axis=1))
         X_val = np.nan_to_num(np.mean(np.nan_to_num(np.mean(X_val, axis=1)), axis=1))
     model_input_shape = X_train[0].shape
-    if mode == 'train':
-        # preprocessing = data_preprocessing(file_dir)
-        # del file_dir
-        # preprocessing.data_roi()
-        # X_train, Y_train, X_test, Y_test, X_val, Y_val, model_input_shape, brix_gt = preprocessing.data_sampling()
 
+    if mode == 'train':
         # Hyper-parameter
         learning_rate = 0.001
         lr_power = 0.00001
         epochs = 3000
         batch_size = 64
-        ''''''
 
-        # In case for loading existing model
-        # model = load_model('model_regression/tai3_part4_cnn_regression_450_700_1126_4g_best_1.h5')
-        if model_type == 'mlp':
-            model = create_model_fc(model_input_shape[0])
+        if model_type == 'fnn':
+            model = create_model_fnn(model_input_shape[0])
         else:
             model = create_model_cnn(model_input_shape)  # create new model
-        # model_cnn = create_model_fc(model_input_shape)
         pdb.set_trace()
         model.summary()  # get information and structure of model
         # Optimizer
@@ -206,8 +179,7 @@ if __name__ == "__main__":
 
         lr_scheduler = LearningRateScheduler(scheduler)
         save_best = ModelCheckpoint(
-            'model_regression/' + str(date_number) + '/tai3_part4_' + model_type.lower() + '_regression_' + str(bands[0]) + '_' + str(
-                bands[1]) + '_' + str(date_number) + '_best_' + str(model_number) + '.h5',
+            'location/to/save/model',
             monitor='val_loss', verbose=2,
             save_best_only=True)
 
@@ -216,21 +188,18 @@ if __name__ == "__main__":
                             validation_data=(X_val, Y_val),
                             verbose=1)
 
+        # to save final model
+        # model.save('location/to/save/model')
+
         # save history
         write_csv(history)
 
-    # save final model
-    # model.save('model_regression/tai3_part4_cnn_regression_1600_1800_1114_4g_1.h5')
-    model = load_model(
-        'model_regression/'+str(date_number)+'/tai3_part4_' + model_type.lower() + '_regression_' + str(bands[0]) + '_' + str(
-            bands[1]) + '_' + str(date_number) + '_best_' + str(model_number) + '.h5')
-
-    # model = load_model('model_best/regression/'+model_type.lower()+'/'+'tai3_part4_'+model_type+'_regression_'+
-    #                   str(bands[0])+'_'+str(bands[1])+'_best.h5')
+    
+    model = load_model('location/to/your/saved/models')
     model.summary()
     unique_test, counts_test = np.unique(Y_test, return_counts=True)
-    #score = model.evaluate(X_test, Y_test, verbose=1)
-    #print('Test loss:', score)
+    
+    # Testing
     diff_array_0_10 = []
     diff_array_10_11 = []
     diff_array_11_12 = []
@@ -285,6 +254,7 @@ if __name__ == "__main__":
     mean_diff_total = np.mean(diff_array_total)
     mean_diff_sec = np.mean(diff_array_total_for_sec)
     sec = np.sqrt(mean_diff_sec)
+    # save the result to csv
     write_result_to_csv([mean_diff_0_10, mean_diff_10_11, mean_diff_11_12, mean_diff_12_13,
                          mean_diff_13_14, mean_diff_14_15, mean_diff_15_16, mean_diff_16_17, mean_diff_total],
                         [len(diff_array_0_10), len(diff_array_10_11), len(diff_array_11_12), len(diff_array_12_13),
@@ -301,8 +271,6 @@ if __name__ == "__main__":
     print('mean error for brix 16-17: ' + str(mean_diff_16_17) + ' with ' + str(len(diff_array_16_17)) + ' samples')
     print('sec: '+str(sec))
     print('sev: ' + str(mean_sev))
-    #pdb.set_trace()
-    #print("Hellow vscode")
     plt.plot(Y_test, prediction_result, 'bo')
     plt.title('Predicted/Measured Result of ' + str(model_type) + ' with bands ' + str(bands[0]) + 'nm-' + str(
         bands[1]) + 'nm')
@@ -310,9 +278,3 @@ if __name__ == "__main__":
     plt.ylabel('Predicted Brix')
     plt.savefig('figures_result/regression/' + model_type.lower() + '_regression_result_' + str(bands[0]) + '_' + str(
         bands[1]) + '_' + str(date_number) + '_' + str(model_number) + '.png')
-    #plt.show()
-
-    # Line notification. Just for reminding me the training is end.
-    message = "Training finished! Loss of test is : " + str(mean_diff_total)
-    token = 'OyJr9RcOgPdHwwH57xyb7soHBKrJa6lDalaW2aWbd23'
-    #lineNotifyMessage(token, message)
